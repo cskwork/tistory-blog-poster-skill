@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tistory SEO Blog Poster"
+  short_description: "Draft Korean SEO posts in Tistory"
+  default_prompt: "Use $tistory-seo-blog-poster to translate this SEO article to Korean, create a cover image, and draft it in Tistory for review."
+policy:
+  allow_implicit_invocation: true
