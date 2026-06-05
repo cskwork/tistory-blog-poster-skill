@@ -52,7 +52,13 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
 
 5. Connect to the existing Chrome session.
    - Read `references/playwright-connect.md` before automating the browser.
-   - Preferred (verified 2026-06-02): `npx -y @playwright/cli@latest attach --cdp=chrome --session=tistory-cdp`. This attaches to the user's already-running Chrome, preserves the Tistory login, AND allows cover upload — extension attach could not do both.
+   - Chrome 136+/148 reality (do NOT relearn this each run): the `chrome://inspect` toggle alone - and `--cdp=chrome` - is NOT enough. The port opens and the WS upgrades, but no CDP data flows without `--remote-allow-origins=*`, so attach dies with `Timeout 30000ms exceeded`. Do not lead with `--cdp=chrome` (it resolves to the bare `/devtools/browser` path, giving 403/timeout) and do not assume a listening 9222 means it will work.
+   - Deterministic path (preserves the user's Tistory login): (re)launch the user's main Chrome WITH the debug flags, then attach with the EXPLICIT GUID WS. The relaunch quits their browser, so confirm with the user or have them run it via `!`:
+     - `osascript -e 'quit app "Google Chrome"'; sleep 3; open -na "Google Chrome" --args --remote-debugging-port=9222 "--remote-allow-origins=*"` (quote the `*` or zsh globs it; same default profile keeps the login).
+     - `WS="ws://127.0.0.1:9222$(sed -n '2p' "$HOME/Library/Application Support/Google/Chrome/DevToolsActivePort")"`
+     - `cd /tmp/tistory && npm_config_cache=/private/tmp/npm-cache npx -y @playwright/cli@latest attach --cdp="$WS" --session=tistory-cdp`
+   - `/json/version` returns empty/404 on modern Chrome even when the port works - build the WS from line 2 of `DevToolsActivePort` (the GUID path), never from `/json`.
+   - If you cannot relaunch the main Chrome, use a dedicated debug profile on a FREE port: `open -na "Google Chrome" --args --remote-debugging-port=9333 "--remote-allow-origins=*" --user-data-dir="$HOME/.chrome-tistory-debug" --no-first-run https://memoryhub.tistory.com/`, then attach to 9333 - but that fresh profile needs a one-time Tistory login.
    - The global `playwright-cli` (e.g. v0.1.0) has NO `attach` subcommand and launches its own login-less browser; use `npx @playwright/cli@latest` for attach and all session commands.
    - `attach` exits 0 immediately but the session persists under `.playwright-cli/` in the cwd. Run every later command from the SAME cwd and `-s=tistory-cdp`.
    - Verify with `npx -y @playwright/cli@latest -s=tistory-cdp tab-list` and `... snapshot` before interacting.
