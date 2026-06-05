@@ -21,6 +21,8 @@ open -na "Google Chrome" --args --remote-debugging-port=9222 "--remote-allow-ori
 # quote the * or zsh globs it -> "no matches found"
 ```
 
+   The DEFAULT profile is GATED: the flag alone does NOT open the port. After relaunch you must ALSO turn ON `chrome://inspect` → "Allow remote debugging for this browser instance" and wait until it reads `Server running at: 127.0.0.1:9222` (while it shows `starting…`, 9222 is not up and attach will keep timing out). So the login-preserving path needs BOTH the flag (relaunch) and the toggle. If the toggle dance is too fragile, prefer the dedicated debug profile (FIX B below) on a FREE port (e.g. 9333): a non-default `--user-data-dir` is NOT gated, so the flag alone opens the port with no toggle — at the cost of a one-time Tistory login in that profile. (Verified 2026-06-06: main-profile relaunch needed flag+toggle and several rounds; the 9333 dedicated profile came up instantly with just the flag.)
+
 2. Attach with the EXPLICIT GUID WS read from DevToolsActivePort (NOT `--cdp=chrome`, NOT `/json`):
 
 ```bash
