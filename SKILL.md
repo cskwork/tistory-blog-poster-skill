@@ -39,11 +39,13 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
    - Keep the body beginner-friendly: shorter paragraphs, first-use jargon definitions, no unnecessary exhaustive background.
 
 4. Create the top image.
-   - For every post, generate a new topic-specific bitmap image with Codex/image generation first. Do not reuse the previous post's image, background, layout, palette, or motif.
+   - For every post, generate a new topic-specific bitmap image with a real image model first. Both `codex` and the `agy` CLI generate real covers (see "Cover Image Script"); use one as the primary and ALWAYS keep the other - codex in particular - available as the fallback. Do not reuse the previous post's image, background, layout, palette, or motif.
    - The image must look like a premium custom editorial illustration for the exact article, not a generic AI cover. Read the title, summary, tags, headings, and body excerpt, then make at least three concrete article concepts visible in the scene.
    - Prefer true image-model output for the final cover: cinematic lighting, depth, material detail, strong focal object, and polished 1200x630 composition. Flat vector diagrams are not acceptable as final covers unless the user explicitly asks for a diagram style.
    - Read `cover_prompt` from the package and use that prompt as the source of truth for the image request.
    - Save the generated image next to the package as `cover.codex.png` or `cover.codex.jpg`, then update `package.json` `cover_png` to that file before browser upload.
+   - Both `codex` and `agy` are real image-model generators. ALWAYS keep `codex` available as the fallback: whenever the primary generator fails or returns `NO_IMAGE_CAPABILITY` for a cover, immediately retry that cover with `codex` (and vice versa) before giving up. See both commands in "Cover Image Script".
+   - Image generation enforces a quota/rate limit. A large parallel batch can exhaust it partway through (seen at roughly 7-8 images), after which calls return `NO_IMAGE_CAPABILITY` for the remainder. Retry the failed covers with the OTHER generator one at a time, and if both still return `NO_IMAGE_CAPABILITY`, wait for the limit to reset and retry.
    - Use `scripts/build_codex_cover_bitmap.py` or `scripts/build_tistory_cover_svg.py` only as preview/fallback assets. If the user required Codex Image 2.0 and image generation is blocked, stop instead of silently uploading fallback.
    - Use a truthful Codex maker label only when Codex actually prepared the draft or image. Avoid relying on readable text inside the image; the Tistory title field carries the headline.
    - If Tistory rejects SVG upload, render the SVG to PNG with the available browser or image tooling and upload the PNG.
@@ -84,9 +86,9 @@ python3 .claude/skills/tistory-seo-blog-poster/scripts/prepare_tistory_package.p
   --output-dir /tmp/tistory-post
 ```
 
-The package contains `package.json`, `body.ko.md`, `cover_prompt.md`, `cover.svg`, and `cover.png` when ImageMagick is available. `cover.svg`/`cover.png` are fallback assets; use `cover_prompt.md` to make a fresh Codex image per post before posting.
+The package contains `package.json`, `body.ko.md`, `cover_prompt.md`, `cover.svg`, and `cover.png` when ImageMagick is available. `cover.svg`/`cover.png` are fallback assets; use `cover_prompt.md` to make a fresh `agy`/`codex` image per post before posting.
 
-Generate the real per-post Codex cover (verified working command). Run inside the package dir so any stray files land in `/tmp`, and never use `--dangerously-bypass-approvals-and-sandbox`:
+Generate the real per-post cover with `codex`. Run inside the package dir so any stray files land in `/tmp`, and never use `--dangerously-bypass-approvals-and-sandbox`:
 
 ```bash
 codex exec -s workspace-write --skip-git-repo-check -C /tmp/tistory-post \
@@ -95,6 +97,18 @@ codex exec -s workspace-write --skip-git-repo-check -C /tmp/tistory-post \
    as cover.codex.png. Must be a true image-model bitmap, not an SVG and not a matplotlib/PIL \
    diagram. If you cannot, print exactly NO_IMAGE_CAPABILITY and stop."
 ```
+
+`agy` is an alternative real image-model generator and the always-on fallback - whenever `codex` returns `NO_IMAGE_CAPABILITY` (commonly when a parallel batch exhausts the shared image quota after roughly 7-8 images), retry that cover with `agy` one at a time, and vice versa. Use absolute paths plus `--add-dir` for workspace access, and never pass `--dangerously-skip-permissions` (the file write succeeds without it):
+
+```bash
+agy --add-dir /tmp/tistory-post -p \
+  "Read cover_prompt.md in /tmp/tistory-post. Generate a real 1200x630 raster cover image \
+   (premium editorial 3D illustration, topic-specific, cinematic lighting/depth) and save it \
+   as /tmp/tistory-post/cover.codex.png. It must be a true image-model bitmap, not an SVG and not \
+   a matplotlib/PIL diagram. If you cannot, print exactly NO_IMAGE_CAPABILITY and stop."
+```
+
+Only if BOTH `codex` and `agy` cannot produce an image (including after a reset wait), and the user accepts fallback publishing, use the local SVG/PNG preview assets. Otherwise stop.
 
 Then point the package at it before upload:
 
@@ -107,7 +121,7 @@ json.dump(j, open(p, "w"), ensure_ascii=False, indent=2)
 PY
 ```
 
-Visually inspect the PNG and reject any generic/reused/diagram-like cover before upload. For many posts, loop the codex step per package; covers are independent and can run in parallel background batches.
+Visually inspect the PNG and reject any generic/reused/diagram-like cover before upload. For many posts, covers are independent and can run in parallel background batches: put the generation command in a small per-slug helper script and fan out with `xargs -P 3 -n1 helper.sh` (an inline `xargs -I {}` body carrying the full prompt fails with `command line cannot be assembled, too long`). Keep concurrency low (around 3), and expect the quota to cut in mid-batch - retry the stragglers with the other generator one at a time, or after a reset wait.
 
 Open Tistory with Playwright CLI and stop after a snapshot:
 
