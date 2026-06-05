@@ -7,22 +7,35 @@ Use this reference when connecting to a user's already-authenticated Chrome sess
 - Playwright Agent CLI docs: `https://playwright.dev/agent-cli/cli-command`
 - Playwright MCP configuration docs: `https://playwright.dev/mcp/configuration/browser-extension`
 
-## Preferred Path (verified 2026-06-02)
+## Preferred Path (Chrome 136+/148 — verified 2026-06-06)
 
-For SEO Machine posting, prefer CDP attach to the user's already-running Chrome. In a live 10-post run it preserved the user's Tistory login AND allowed cover-image upload — the two things extension attach could not do together.
+CDP attach to the user's already-running Chrome preserves the Tistory login AND allows cover-image upload (extension attach could not do both). But on Chrome 136+/148 the naive `--cdp=chrome` and the `chrome://inspect` toggle-only approach FAIL (mechanism in the Notes below). Do NOT relearn that failure every run: use this deterministic procedure.
+
+The global `playwright-cli` (e.g. v0.1.0) has NO `attach` subcommand and launches its own login-less browser — always use `npx @playwright/cli@latest`.
+
+1. (Re)launch the user's main Chrome WITH the debug flags. This quits their browser, so confirm or have them run it via `!`; the same default profile keeps the Tistory login (cookies on disk):
 
 ```bash
-# The global `playwright-cli` (e.g. v0.1.0) has NO `attach` subcommand and
-# launches its own browser (no login). Use the latest CLI via npx instead.
+osascript -e 'quit app "Google Chrome"'; sleep 3
+open -na "Google Chrome" --args --remote-debugging-port=9222 "--remote-allow-origins=*"
+# quote the * or zsh globs it -> "no matches found"
+```
+
+2. Attach with the EXPLICIT GUID WS read from DevToolsActivePort (NOT `--cdp=chrome`, NOT `/json`):
+
+```bash
 cd /tmp/tistory   # session state lives in ./.playwright-cli — keep one cwd
+WS="ws://127.0.0.1:9222$(sed -n '2p' "$HOME/Library/Application Support/Google/Chrome/DevToolsActivePort")"
 env npm_config_cache=/private/tmp/npm-cache \
-  npx -y @playwright/cli@latest attach --cdp=chrome --session=tistory-cdp
+  npx -y @playwright/cli@latest attach --cdp="$WS" --session=tistory-cdp
+npx -y @playwright/cli@latest -s=tistory-cdp tab-list   # verify before interacting
 ```
 
 Notes:
+- Why `--cdp=chrome` / toggle-only fail: the port opens and the WS upgrades, but Chrome 111+ sends NO CDP data unless launched with `--remote-allow-origins=*`, so attach dies with `Timeout 30000ms exceeded`. The toggle opens the port; it does NOT add the origin allowlist. Relaunching with the flag is the fix. `--cdp=chrome` also resolves to the bare `/devtools/browser` path (no GUID) → `403`/timeout. A listening 9222 alone does NOT mean attach will work.
 - `attach` exits with code 0 immediately; the session persists on disk under `.playwright-cli/` in the cwd. It did not fail or hang — do not retry it as if it crashed.
-- Every later command must run from the SAME cwd and the same `-s=tistory-cdp` session, e.g. `npx -y @playwright/cli@latest -s=tistory-cdp tab-list`.
-- `--cdp=chrome` attaches to the existing Chrome process; if the user is already logged into Tistory there, no re-login is needed.
+- Every later command must run from the SAME cwd and the same `-s=tistory-cdp` session.
+- `/json/version` returns empty/404 on modern Chrome even when the port works — build the WS from line 2 of `DevToolsActivePort` (the GUID path), never from `/json`.
 - npx re-resolves the package (~5-10s) on every call. For long multi-post runs, consider a global install to cut cold-start, or batch steps into fewer `run-code` invocations.
 
 ## Decision Tree
