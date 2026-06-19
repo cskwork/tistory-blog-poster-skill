@@ -55,6 +55,19 @@ def remove_duplicate_h1(body: str, title: str) -> str:
     return re.sub(pattern, "", body, count=1, flags=re.MULTILINE).strip()
 
 
+def strip_thumbnail_prompt_section(body: str) -> str:
+    """Drop a stray "## 썸네일 프롬프트" (thumbnail/cover prompt) section from the
+    published body. The prompt is a cover-generation input only, never reader-facing
+    content. Matches a heading whose text contains 썸네일 or thumbnail, removing it
+    through the next same-or-higher-level heading (or end of document)."""
+    pattern = re.compile(
+        r"^(#{1,6})[ \t]*[^\n]*(?:썸네일|thumbnail|cover prompt)[^\n]*\n"
+        r"(?:.*?)(?=^#{1,6}[ \t]|\Z)",
+        flags=re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    )
+    return re.sub(pattern, "", body).strip()
+
+
 def as_list(value: object) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
@@ -116,6 +129,7 @@ def package_article(source: Path, output_dir: Path, args: argparse.Namespace) ->
     meta, body = split_front_matter(raw)
     title = args.title or str(meta.get("title") or first_heading(body) or source.stem)
     body = remove_duplicate_h1(body, title)
+    body = strip_thumbnail_prompt_section(body)
     summary = args.summary or str(meta.get("description") or meta.get("summary") or "")
     tags = as_list(args.tags or meta.get("tags") or [])
     categories = as_list(args.category or meta.get("categories") or [])
