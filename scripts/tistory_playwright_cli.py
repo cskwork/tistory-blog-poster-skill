@@ -204,6 +204,22 @@ def write_tinymce_script(args: argparse.Namespace, package: dict[str, object]) -
     return path
 
 
+def package_category(args: argparse.Namespace, package: dict[str, object]) -> str:
+    """Resolve the Tistory category name to auto-select.
+
+    Priority: --category CLI flag, then the package's first `categories` entry.
+    The name must match a category in the target blog's taxonomy (sub-category
+    label, e.g. "MCP", "VectorDB"); the editor option's leading "- " is ignored
+    at match time. Empty string means leave the post in 카테고리 없음.
+    """
+    if args.category:
+        return args.category
+    categories = package.get("categories") or []
+    if isinstance(categories, list) and categories:
+        return str(categories[0])
+    return ""
+
+
 def package_payload(args: argparse.Namespace, package: dict[str, object]) -> str:
     payload = {
         "targetUrl": args.target_url,
@@ -211,6 +227,7 @@ def package_payload(args: argparse.Namespace, package: dict[str, object]) -> str
         "bodyHtml": render_body_html(Path(str(package["body_markdown"]))),
         "tags": [str(item) for item in package.get("tags", [])],
         "cover": str(cover_file(package)),
+        "category": package_category(args, package),
     }
     return json.dumps(payload, ensure_ascii=False)
 
@@ -229,6 +246,18 @@ def write_private_publish_script(args: argparse.Namespace, package: dict[str, ob
     editor.fire("change");
     return {{ hasCover: /<img\\b|##_Image/i.test(editor.getContent()), chars: editor.getContent({{ format: "text" }}).length }};
   }}, payload);
+  let categorySet = false;
+  if (payload.category) {{
+    const combo = page.getByRole("combobox", {{ name: "카테고리 선택" }});
+    if (await combo.count()) {{
+      await combo.click();
+      const idx = await page.evaluate((t) => {{
+        const opts = [...document.querySelectorAll('[role=option]')];
+        return opts.findIndex(o => o.textContent.replace(/^[-\\s]+/, "").trim() === t);
+      }}, payload.category);
+      if (idx >= 0) {{ await page.getByRole("option").nth(idx).click(); categorySet = true; }}
+    }}
+  }}
   const tagInput = page.getByRole("textbox", {{ name: "태그" }}).last();
   for (const tag of payload.tags) {{
     await tagInput.fill(tag);
@@ -238,7 +267,7 @@ def write_private_publish_script(args: argparse.Namespace, package: dict[str, ob
   await page.getByRole("radio", {{ name: "비공개" }}).click();
   await page.getByRole("button", {{ name: "비공개 저장" }}).click();
   await page.waitForURL(/\\/manage\\/posts\\/?/, {{ timeout: 60000 }});
-  return {{ title: payload.title, url: page.url(), tags: payload.tags.length, ...result }};
+  return {{ title: payload.title, url: page.url(), tags: payload.tags.length, category: payload.category, categorySet, ...result }};
 }})()
 """
     path = publish_script_path(args)
@@ -403,6 +432,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--extension-channel", default="")
     parser.add_argument("--cdp-endpoint", default="chrome")
     parser.add_argument("--target-url", default="https://www.tistory.com/")
+    parser.add_argument("--category", help="Tistory category name to auto-select (overrides package categories[0]); editor option '- ' prefix is ignored when matching")
     parser.add_argument("--skip-open", action="store_true")
     parser.add_argument("--title-target")
     parser.add_argument("--body-target")

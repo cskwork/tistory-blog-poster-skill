@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tistory SEO Blog Poster Skill</title>
+<meta name="description" content="Write a Korean SEO blog post first, then auto-generate a Codex cover and privately publish it to Tistory through your own Chrome session. A reusable Claude Code and Codex skill." />
+<meta name="theme-color" content="#0b0e14" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Tistory SEO Blog Poster Skill" />
+<meta property="og:description" content="Write Korean SEO posts, generate a topic-specific Codex cover, and privately publish to Tistory via your logged-in Chrome." />
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg-soft: #11151f;
+    --card: #141a26;
+    --border: #232b3a;
+    --ink: #e7ecf3;
+    --muted: #9aa6b8;
+    --accent: #7c8cff;
+    --accent-2: #b07cff;
+    --code-bg: #0a0d13;
+    --good: #5ad19b;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  code, pre { font-family: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", monospace; }
+
+  /* Hero */
+  header.hero {
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(900px 420px at 75% -10%, rgba(124,140,255,0.18), transparent 60%),
+      radial-gradient(700px 360px at 10% 0%, rgba(176,124,255,0.14), transparent 55%);
+  }
+  .hero-inner { padding: 84px 0 72px; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent-2); font-weight: 600;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 14px; background: var(--bg-soft);
+  }
+  h1 {
+    font-size: clamp(34px, 6vw, 56px); line-height: 1.08;
+    margin: 22px 0 14px; letter-spacing: -0.02em; font-weight: 800;
+    background: linear-gradient(120deg, #fff 20%, var(--accent) 70%, var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tagline { font-size: clamp(17px, 2.4vw, 21px); color: var(--ink); max-width: 720px; margin: 0 0 10px; }
+  .tagline-ko { font-size: 16px; color: var(--muted); max-width: 720px; margin: 0 0 28px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 30px; }
+  .badge {
+    font-size: 13px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 11px; background: var(--bg-soft);
+  }
+  .badge strong { color: var(--ink); font-weight: 600; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 14px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: 15px; font-weight: 600; padding: 12px 22px; border-radius: 10px;
+    border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-primary { background: linear-gradient(120deg, var(--accent), var(--accent-2)); color: #0b0e14; }
+  .btn-primary:hover { text-decoration: none; filter: brightness(1.07); }
+  .btn-ghost { border-color: var(--border); color: var(--ink); background: var(--bg-soft); }
+  .btn-ghost:hover { text-decoration: none; border-color: var(--accent); }
+  .btn svg { width: 18px; height: 18px; }
+
+  /* Sections */
+  section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+  .kicker { color: var(--accent); font-weight: 600; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px; }
+  h2 { font-size: clamp(26px, 4vw, 34px); margin: 0 0 10px; letter-spacing: -0.01em; font-weight: 750; }
+  .lead { color: var(--muted); max-width: 680px; margin: 0 0 36px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 650; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .card .num { font-family: monospace; font-size: 13px; color: var(--accent-2); font-weight: 700; letter-spacing: 0.08em; }
+
+  /* Steps */
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; gap: 14px; }
+  ol.steps li {
+    counter-increment: s; position: relative; padding: 18px 20px 18px 64px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  }
+  ol.steps li::before {
+    content: counter(s); position: absolute; left: 18px; top: 16px;
+    width: 32px; height: 32px; border-radius: 8px;
+    display: grid; place-items: center; font-family: monospace; font-weight: 700;
+    color: #0b0e14; background: linear-gradient(120deg, var(--accent), var(--accent-2));
+  }
+  ol.steps li strong { display: block; font-size: 16px; margin-bottom: 2px; }
+  ol.steps li span { color: var(--muted); font-size: 15px; }
+
+  /* Code */
+  .codeblock { margin: 0 0 22px; }
+  .codeblock .label { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.7; margin: 0;
+    color: #d6deea;
+  }
+  pre .c { color: #6b7888; }
+  pre .k { color: var(--accent); }
+
+  ul.plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  ul.plain li { padding-left: 28px; position: relative; color: var(--muted); font-size: 15.5px; }
+  ul.plain li::before {
+    content: ""; position: absolute; left: 4px; top: 9px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--good);
+  }
+  ul.plain li strong { color: var(--ink); font-weight: 600; }
+
+  footer { padding: 48px 0 64px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+
+  @media (max-width: 560px) {
+    .hero-inner { padding: 60px 0 52px; }
+    section { padding: 56px 0; }
+    .cta-row { width: 100%; }
+    .btn { flex: 1; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <span class="eyebrow">Claude Code &middot; Codex Skill</span>
+    <h1>Tistory SEO Blog Poster</h1>
+    <p class="tagline">Write a Korean SEO blog post first &mdash; then auto-generate a topic-specific Codex cover and privately publish it to Tistory through your own logged-in Chrome session.</p>
+    <p class="tagline-ko">한국어 SEO 글을 먼저 쓰고, 토픽 맞춤 Codex 커버와 함께 Tistory에 비공개로 발행하는 재사용 스킬입니다.</p>
+    <div class="badges">
+      <span class="badge"><strong>Python</strong> 3.9+</span>
+      <span class="badge"><strong>Playwright</strong> Agent CLI</span>
+      <span class="badge"><strong>Codex</strong> Image 2.0</span>
+      <span class="badge"><strong>Private</strong> by default</span>
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/cskwork/tistory-blog-poster-skill">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+      <a class="btn btn-ghost" href="#quickstart">Quickstart</a>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <p class="kicker">What it does</p>
+    <h2>From a Korean draft to a published Tistory post</h2>
+    <p class="lead">The skill encodes the full pipeline: package the post, generate a fresh cover, reuse your browser session, and save privately.</p>
+    <div class="grid">
+      <div class="card"><h3>Korean post &rarr; package</h3><p>Converts a Korean Markdown or Hugo post into a ready-to-post Tistory package.</p></div>
+      <div class="card"><h3>Auto cover prompt</h3><p>Builds <code>cover_prompt.md</code> from the title, summary, tags, headings, and body signals.</p></div>
+      <div class="card"><h3>Topic-specific cover</h3><p>Requires a unique Codex Image 2.0 cover for every final post &mdash; no recycled banners.</p></div>
+      <div class="card"><h3>Readable Tistory body</h3><p>Adds clean spacing for paragraphs, headings, lists, tables, blockquotes, and code.</p></div>
+      <div class="card"><h3>Reuse your Chrome</h3><p>Drives the Playwright Agent CLI against an existing authenticated Chrome session over CDP.</p></div>
+      <div class="card"><h3>Private by default</h3><p>Refuses public publishing unless you explicitly confirm it in the request.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <p class="kicker">How it works</p>
+    <h2>Six steps, one session</h2>
+    <p class="lead">Writing comes first. Posting is the deterministic pipeline that runs after the article is ready.</p>
+    <ol class="steps">
+      <li><strong>Write</strong><span>Draft a Korean SEO post in Markdown or Hugo, following the Korean blog writing standard.</span></li>
+      <li><strong>Package</strong><span><code>prepare_tistory_package.py</code> builds the package and a topic-aware <code>cover_prompt.md</code>.</span></li>
+      <li><strong>Cover</strong><span>Generate a unique cover with Codex Image 2.0 and save it as <code>cover.codex.png</code>.</span></li>
+      <li><strong>Attach</strong><span>Connect the Playwright CLI to your logged-in Chrome through the CDP endpoint.</span></li>
+      <li><strong>Render</strong><span>Upload the cover and render readable Korean body HTML in the Tistory editor.</span></li>
+      <li><strong>Publish</strong><span>Save as 비공개 (private). Public conversion stays with the user, on explicit confirm.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <p class="kicker">Quickstart</p>
+    <h2>Install and run</h2>
+    <p class="lead">Link the skill into Claude Code or Codex, package a post, then publish privately.</p>
+
+    <div class="codeblock">
+      <p class="label">1. Install (link the standalone clone)</p>
+      <pre><span class="c"># Claude Code</span>
+ln -s "$PWD" ~/.claude/skills/tistory-seo-blog-poster
+<span class="c"># Codex</span>
+ln -s "$PWD" ~/.codex/skills/tistory-seo-blog-poster</pre>
+    </div>
+
+    <div class="codeblock">
+      <p class="label">2. Prepare a package</p>
+      <pre>python3 scripts/prepare_tistory_package.py \
+  <span class="k">--source</span> /path/to/post.md \
+  <span class="k">--output-dir</span> /tmp/tistory-post</pre>
+    </div>
+
+    <div class="codeblock">
+      <p class="label">3. Publish privately (after generating the cover and attaching Chrome)</p>
+      <pre>python3 scripts/tistory_playwright_cli.py \
+  <span class="k">--package</span> /tmp/tistory-post/package.json \
+  <span class="k">--session</span> tistory-cdp <span class="k">--attach</span> none \
+  <span class="k">--target-url</span> "https://YOUR_BLOG.tistory.com/manage/newpost/?type=post" \
+  <span class="k">--private-publish</span> <span class="k">--confirm-private-publish</span></pre>
+    </div>
+  </div>
+</section>
+
+<section id="guardrails">
+  <div class="wrap">
+    <p class="kicker">Guardrails</p>
+    <h2>Safe by design</h2>
+    <p class="lead">The skill is built to protect your account and keep covers authentic.</p>
+    <ul class="plain">
+      <li><strong>One cover per post.</strong> Never reuse a cover image; reject generic AI banners before upload.</li>
+      <li><strong>Real covers only.</strong> No local fallback covers for final publishing when Codex Image 2.0 is available.</li>
+      <li><strong>Your login stays yours.</strong> Tistory login lives in your browser &mdash; no cookies or profiles exported to the repo.</li>
+      <li><strong>Private first.</strong> Private or draft flows by default; public publishing only on an explicit request.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Built for Claude Code &amp; Codex.</span>
+    <span><a href="https://github.com/cskwork/tistory-blog-poster-skill">github.com/cskwork/tistory-blog-poster-skill</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
