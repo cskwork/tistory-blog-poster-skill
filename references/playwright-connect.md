@@ -9,7 +9,7 @@ Use this reference when connecting to a user's already-authenticated Chrome sess
 
 ## Preferred Path (Chrome 136+/148 — verified 2026-06-06)
 
-CDP attach to the user's already-running Chrome preserves the Tistory login AND allows cover-image upload (extension attach could not do both). But on Chrome 136+/148 the naive `--cdp=chrome` and the `chrome://inspect` toggle-only approach FAIL (mechanism in the Notes below). Do NOT relearn that failure every run: use this deterministic procedure.
+CDP attach to the user's already-running Chrome preserves the Tistory login AND allows cover-image upload (extension attach could not do both). But on Chrome 136+/148 the naive `--cdp=chrome` and the `chrome://inspect` toggle-only approach FAIL — see "Chrome 136+/148 default-profile breakage" below for the mechanism. Do NOT relearn that failure every run: use this deterministic procedure.
 
 The global `playwright-cli` (e.g. v0.1.0) has NO `attach` subcommand and launches its own login-less browser — always use `npx @playwright/cli@latest`.
 
@@ -39,6 +39,51 @@ Notes:
 - Every later command must run from the SAME cwd and the same `-s=tistory-cdp` session.
 - `/json/version` returns empty/404 on modern Chrome even when the port works — build the WS from line 2 of `DevToolsActivePort` (the GUID path), never from `/json`.
 - npx re-resolves the package (~5-10s) on every call. For long multi-post runs, consider a global install to cut cold-start, or batch steps into fewer `run-code` invocations.
+
+## Chrome 136+/148 default-profile breakage (verified 2026-06-03)
+
+**FIRST RESPONSE WHEN ATTACH FAILS — PROMPT THE USER.** Before any WS-URL debugging, ask the user to open `chrome://inspect/#remote-debugging` in their Chrome and turn ON "Allow remote debugging for this browser instance". Tell them to wait until that page shows `Server running at: 127.0.0.1:9222` — while it still reads `Server running at: starting…` the CDP endpoint is not up yet and attach will keep failing. Only after it shows the running address should you (re)attach. This is a USER action; never bypass it. Once the toggle is on, `~/Library/Application Support/Google/Chrome/DevToolsActivePort` line 2 holds the GUID path (e.g. `/devtools/browser/<guid>`) used to build the explicit endpoint above. Note: the toggle opens the port but does NOT add `--remote-allow-origins=*`; if attach still times out after the server is running, Chrome must be relaunched with that flag (FIX A below).
+
+`attach --cdp=chrome` stopped working overnight after Chrome auto-updated to 148. Symptom chain and the fix that actually worked in a live 10-post run:
+
+What you see:
+- `attach --cdp=chrome` resolves (via the default profile's `DevToolsActivePort`) to the BARE path `ws://localhost:9222/devtools/browser` (no GUID) and fails:
+  - toggle OFF → `403 Forbidden` / `Connection rejected` / "Could not connect to chrome".
+  - toggle ON but missing origin flag → `<ws connecting> ...` then `Timeout 30000ms exceeded` (the WS upgrades but no CDP data ever flows).
+- `curl -s http://127.0.0.1:9222/json/version` returns `404` on the default profile. This is NORMAL on modern Chrome (HTTP discovery is disabled); it is not the root cause — rely on the WS endpoint, not `/json`.
+
+Three root causes stack up:
+1. Chrome 136+ gates remote debugging on the DEFAULT `user-data-dir`. Enable `chrome://inspect/#remote-debugging` → "Allow remote debugging for this browser instance" (it shows `Server running at: 127.0.0.1:9222`). This is a USER action — ask for it, never bypass.
+2. Chrome 111+ accepts the CDP WebSocket upgrade but sends no protocol data unless Chrome was launched with `--remote-allow-origins=*` → looks like a hang/timeout, not a 403.
+3. `--cdp=chrome` connects to the bare `/devtools/browser`; modern Chrome wants the exact GUID path. Pass the EXPLICIT ws URL instead.
+
+FIX A — preserve the user's Tistory login (what worked here). On the user's MAIN Chrome: enable the toggle (1), make sure it runs with `--remote-debugging-port=9222 --remote-allow-origins=*` (relaunch if it lacks the origin flag), then attach with the explicit endpoint read from `/json/version` (or built from `DevToolsActivePort`):
+
+```bash
+cd /tmp
+WS=$(curl -s -m5 http://127.0.0.1:9222/json/version | sed -n 's/.*"webSocketDebuggerUrl": *"\([^"]*\)".*/\1/p')
+# if /json/version is 404, build it from line 2 of DevToolsActivePort:
+[ -z "$WS" ] && WS="ws://127.0.0.1:9222$(sed -n '2p' "$HOME/Library/Application Support/Google/Chrome/DevToolsActivePort")"
+npx -y @playwright/cli@latest attach --cdp="$WS" --session=main9222   # rc=0 = attached
+npx -y @playwright/cli@latest -s=main9222 tab-list
+```
+
+FIX B — dedicated debug profile (deterministic, version-proof, but a FRESH profile is NOT logged into Tistory → user must log in once). Launch on a FREE port (9222 is usually held by the broken default instance) via `open -na` so launchd owns it:
+
+```bash
+open -na "Google Chrome" --args \
+  --remote-debugging-port=9333 "--remote-allow-origins=*" \
+  --user-data-dir="$HOME/.chrome-tistory-debug" --no-first-run \
+  https://memoryhub.tistory.com/
+WS=$(curl -s -m5 http://127.0.0.1:9333/json/version | sed -n 's/.*"webSocketDebuggerUrl": *"\([^"]*\)".*/\1/p')
+npx -y @playwright/cli@latest attach --cdp="$WS" --session=tcdp
+```
+
+Gotchas that cost time here, so you do not repeat them:
+- Quote `--remote-allow-origins=*` (single arg) or zsh globs the `*` → `no matches found`.
+- The agent's sandboxed Bash REAPS background children when the call returns: a Chrome started with `nohup ... &`/`&` dies before the next command. Use `open -na` (launchd-owned) for Chrome; run long codex/posting batches as ONE background task that `wait`s on its children.
+- Open a NEW tab (`tab-new <url>`) for posting work instead of `goto` on the user's active tab, so you do not navigate away from what they have open.
+- Read the live category list once from the publish dialog (`완료` → open the `카테고리 선택` combobox → `getByRole('option').allTextContents()`); the `/manage/category` tree renders names lazily and snapshots come back empty.
 
 ## Decision Tree
 
