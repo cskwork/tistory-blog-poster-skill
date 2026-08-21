@@ -1,6 +1,6 @@
 ---
 name: tistory-seo-blog-poster
-description: Use when the user wants a Tistory blog post. The skill WRITES the Korean article first (from a keyword, topic, link, memo, or existing source, following the Korean blog writing standard), THEN runs the posting pipeline — generate a Codex cover, attach to the user's logged-in Chrome via Playwright CLI, upload the cover, render the body, and save the Tistory post as private. Trigger for Tistory, tistory.com, 글쓰기, "블로그 글 작성", "네이버/티스토리 블로그용", Korean blog posting, SEO article publishing, browser-session reuse, Playwright CLI automation, or cover-image generation for blog posts.
+description: Tistory blog posting — writes a Korean SEO article and gets it into the Tistory editor. Use when the user asks for a Tistory post or draft from a keyword, topic, link, memo, or an existing article; says 티스토리, tistory.com, or 블로그 글 작성; wants a cover image generated for a blog post; or needs to reach the Tistory editor through their already-logged-in Chrome.
 ---
 
 # Tistory SEO Blog Poster
@@ -25,10 +25,9 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
    - Never ask for passwords or 2FA codes. If Tistory shows a login wall, ask the user to log in inside Chrome, then reconnect.
 
 2. Write the article following `references/korean-blog-writing.md`.
-   - This is the primary content step and happens BEFORE any browser work.
    - Present the short 작성 방향 체크리스트, do web research (2+ trusted sources for time-sensitive topics), then produce the full finished Korean article: 제목 → 한줄요약 → 인트로 → 본문 → 참고자료. The cover/thumbnail prompt is NOT a body section — keep it out of the published article and deliver it separately (in chat or directly as `cover_prompt.md`); it is for image generation only.
    - If the source is an existing English/Hugo article, translate to natural Korean and strip front matter; preserve code blocks, URLs, product names, numbers, and sourced claims.
-   - For this repo, also consult `context/brand-voice.md`, `context/style-guide.md`, `context/seo-guidelines.md`, and `context/internal-links-map.md` when present.
+   - Also consult `context/brand-voice.md`, `context/style-guide.md`, `context/seo-guidelines.md`, and `context/internal-links-map.md` when the working repo has them.
    - Do not invent stats, citations, or internal links. If a claim needs a current source, verify it first.
    - Save the finished article as a Korean Markdown file (e.g. `/tmp/tistory/<slug>/article.ko.md`) for Phase B.
 
@@ -45,11 +44,9 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
    - Prefer true image-model output for the final cover: cinematic lighting, depth, material detail, strong focal object, and polished 1200x630 composition. Flat vector diagrams are not acceptable as final covers unless the user explicitly asks for a diagram style.
    - Read `cover_prompt` from the package and use that prompt as the source of truth for the image request.
    - Save the generated image next to the package as `cover.codex.png` or `cover.codex.jpg`, then update `package.json` `cover_png` to that file before browser upload.
-   - Both `agy` and `codex` are real image-model generators. ALWAYS keep `codex` available as the fallback: whenever the primary generator fails or returns `NO_IMAGE_CAPABILITY` for a cover, immediately retry that cover with `codex` (and vice versa) before giving up. See both commands in "Cover Image Script".
    - HARD 5-MINUTE CAP PER IMAGE (never hang forever). Wrap every `agy`/`codex` image call in a 5-minute timeout: prefix with `timeout 300` / `gtimeout 300` (GNU coreutils), or run as a background task and kill it past 300s. `agy` and `codex` can silently hang at ~0% CPU on a single cover (observed ~18 min stuck). On timeout, KILL the process, then retry that cover ONCE with the OTHER generator (also under `timeout 300`). Do not keep waiting on a stalled generator.
    - `NO_IMAGE_CAPABILITY` from `codex` is USUALLY A TRANSIENT THROTTLE, NOT A DEAD END (verified 2026-06-06). `codex` generates through the OpenAI `gpt-image-2` / "ChatGPT Images 2.0" backend (launched 2026-04-21, compute-heavy "thinking mode"). When it prints `NO_IMAGE_CAPABILITY` it is almost always relaying a short-term rate-limit/fairness throttle that recovers in MINUTES — in one run codex failed at 03:16 and the identical request succeeded at 03:22 (~6 min). It is NOT a capability loss and (on ChatGPT Pro) NOT a plan-quota exhaustion: Pro has no fixed per-image cap; image access is governed by dynamic fairness/stability throttles. The trigger is BURST — firing several image calls in a short window (e.g. a stalled generator plus retries running near-simultaneously) trips the cooldown.
    - Therefore: (1) SERIALIZE cover generation — never run `agy`/`codex` image calls concurrently; one at a time. (2) On `NO_IMAGE_CAPABILITY`/rate-limit, first fall back to the OTHER backend (`agy` uses a separate provider, so it usually works immediately), and/or wait ~5 minutes and RETRY `codex` — do not declare the cover impossible after one failure. (3) Plus accounts (not Pro) do have rolling per-window caps (community-reported ~50 images / rolling 3h); only there does "wait for the window to reset" mean tens of minutes.
-   - Only after BOTH `codex` and `agy` fail for a given cover (including after a reset wait) should you stop or, with explicit user consent, use a local preview asset.
    - Use `scripts/build_codex_cover_bitmap.py` or `scripts/build_tistory_cover_svg.py` only as preview/fallback assets. If the user required Codex Image 2.0 and image generation is blocked, stop instead of silently uploading fallback.
    - Use a truthful Codex maker label only when Codex actually prepared the draft or image. Avoid relying on readable text inside the image; the Tistory title field carries the headline.
    - If Tistory rejects SVG upload, render the SVG to PNG with the available browser or image tooling and upload the PNG.
@@ -70,6 +67,7 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
    - Use `scripts/tistory_playwright_cli.py` for repeatable open/fill/publish steps.
 
 6. Open Tistory 글쓰기.
+   - Read `references/tistory-editor.md` before touching the editor fields.
    - Known blog host (this repo): `memoryhub.tistory.com`; new-post URL `https://memoryhub.tistory.com/manage/newpost/?type=post&returnURL=%2Fmanage%2Fposts%2F`.
    - Otherwise start from `https://www.tistory.com/` and navigate by visible Korean labels: `글쓰기`, `제목을 입력하세요`, `글 내용 입력`, `첨부`→`사진`, `카테고리`, `태그`, `완료`.
    - On opening newpost, Tistory may raise a confirm() restore dialog ("저장된 글이 있습니다. 이어서 작성하시겠습니까?"). It blocks run-code with `does not handle the modal state`. The helper now handles this by doing `goto` then `dialog-dismiss` as separate CLI steps before any run-code — do NOT goto inside a run-code script.
@@ -80,7 +78,7 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
    - For long bodies, set the TinyMCE content via the helper's `--tinymce-body` / private-publish scripts rather than typing. Confirm visible text after insertion.
    - The helper demotes body headings one level (h1→h2, h2→h3) so the Tistory title stays the only H1 and the body keeps a clean SEO heading hierarchy.
    - The private-publish flow auto-selects the category from the package `categories[0]` (override with `--category`): it opens the `카테고리 선택` combobox and clicks the matching option, ignoring the `- ` prefix. The returned JSON includes `category` and `categorySet`; if `categorySet` is false the name did not match any option and the post stays in 카테고리 없음 (publishing is not blocked). To set a category on an ALREADY-published post, open `/manage/post/<id>`, select the category, then 완료 → 비공개 → 비공개 저장.
-   - For SEO Machine final distribution, use private publish (`비공개 저장`) by default via `--private-publish --confirm-private-publish`. Public conversion is the user's final action; never click public publish without explicit approval in the current request.
+   - Save as private (`비공개 저장`) by default via `--private-publish --confirm-private-publish`. Public conversion is the user's final action; never click public publish without explicit approval in the current request.
    - The helper now treats a CLI `### Error` line as failure (nonzero exit) and asserts the editor reports a cover image before returning, so partial failures surface instead of looking successful.
 
 8. Verify before claiming completion.
@@ -90,10 +88,12 @@ Prefer the Playwright Agent CLI (it attaches to the real browser); use MCP only 
 
 ## Cover Image Script
 
+Script paths below assume the Claude Code install (`~/.claude/skills/tistory-seo-blog-poster/`); for the Codex install substitute `~/.codex/skills/`.
+
 Create a complete posting package from a Korean Markdown file:
 
 ```bash
-python3 .claude/skills/tistory-seo-blog-poster/scripts/prepare_tistory_package.py \
+python3 ~/.claude/skills/tistory-seo-blog-poster/scripts/prepare_tistory_package.py \
   --source /tmp/article.ko.md \
   --output-dir /tmp/tistory-post
 ```
@@ -110,7 +110,7 @@ timeout 300 codex exec -s workspace-write --skip-git-repo-check -C /tmp/tistory-
    diagram. If you cannot, print exactly NO_IMAGE_CAPABILITY and stop."
 ```
 
-`agy` is the verified primary generator for bulk covers (2026-06-03) and `codex` above is the always-on fallback - use whichever is available and ALWAYS fall back to the other when one returns `NO_IMAGE_CAPABILITY`. Image generation enforces a quota/rate limit that a large parallel batch can exhaust after roughly 7-8 images; retry the failed covers with the other generator one at a time, and if both fail wait for the limit to reset before retrying. For `agy`, use absolute paths plus `--add-dir` for workspace access, and never pass `--dangerously-skip-permissions` (the file write succeeds without it):
+`agy` is the verified primary generator for bulk covers (2026-06-03) and `codex` above is the always-on fallback - use whichever is available and ALWAYS fall back to the other when one returns `NO_IMAGE_CAPABILITY`. Image generation enforces a quota/rate limit that a burst of back-to-back calls can trip after roughly 7-8 images; retry the failed covers with the other generator one at a time, and if both fail wait for the limit to reset before retrying. For `agy`, use absolute paths plus `--add-dir` for workspace access, and never pass `--dangerously-skip-permissions` (the file write succeeds without it):
 
 ```bash
 timeout 300 agy --add-dir /tmp/tistory-post -p \
@@ -133,19 +133,19 @@ json.dump(j, open(p, "w"), ensure_ascii=False, indent=2)
 PY
 ```
 
-Visually inspect the PNG and reject any generic/reused/diagram-like cover before upload. For many posts, covers are independent and can run in parallel background batches: put the generation command in a small per-slug helper script and fan out with `xargs -P 3 -n1 helper.sh` (an inline `xargs -I {}` body carrying the full prompt fails with `command line cannot be assembled, too long`). Keep concurrency low (around 3), and expect the quota to cut in mid-batch - retry the stragglers with the other generator one at a time, or after a reset wait.
+Visually inspect the PNG and reject any generic/reused/diagram-like cover before upload. For many posts, run the covers one at a time inside a single background batch: put the generation command in a small per-slug helper script and walk the slugs sequentially with `xargs -n1 helper.sh` (no `-P`; an inline `xargs -I {}` body carrying the full prompt fails with `command line cannot be assembled, too long`). Concurrent image calls are what trips the throttle, so retry any straggler with the other generator one at a time, or after a reset wait.
 
 Open Tistory with Playwright CLI and stop after a snapshot:
 
 ```bash
-python3 .claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
+python3 ~/.claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
   --package /tmp/tistory-post/package.json
 ```
 
 After a snapshot exposes current refs, fill a draft without publishing:
 
 ```bash
-python3 .claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
+python3 ~/.claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
   --package /tmp/tistory-post/package.json \
   --title-target e12 \
   --tinymce-body \
@@ -157,7 +157,7 @@ python3 .claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py
 When a cover is already uploaded in the active editor, reuse the page without navigation:
 
 ```bash
-python3 .claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
+python3 ~/.claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
   --package /tmp/tistory-post/package.json \
   --session tistory-cdp \
   --attach none \
@@ -170,7 +170,7 @@ python3 .claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py
 Private-publish end-to-end in one call (verified). Navigates to newpost, dismisses the restore dialog, fills title, uploads the cover, inserts the body, adds tags, and saves as `비공개`:
 
 ```bash
-cd /tmp && python3 .claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
+cd /tmp && python3 ~/.claude/skills/tistory-seo-blog-poster/scripts/tistory_playwright_cli.py \
   --package /tmp/tistory-post/package.json \
   --cli "npx @playwright/cli@latest" --npm-cache /private/tmp/npm-cache \
   --session tistory-cdp --attach none \
@@ -183,7 +183,7 @@ For multiple posts, loop this sequentially (one shared browser tab — do not ru
 Create only a fallback cover SVG:
 
 ```bash
-python3 .claude/skills/tistory-seo-blog-poster/scripts/build_tistory_cover_svg.py \
+python3 ~/.claude/skills/tistory-seo-blog-poster/scripts/build_tistory_cover_svg.py \
   --title "Playwright CLI로 티스토리 자동화하기" \
   --subtitle "기존 Chrome 세션을 재사용하는 SEO 게시 워크플로우" \
   --output /tmp/tistory-cover.svg
@@ -201,10 +201,8 @@ Use `--badge`, `--category`, and `--accent` when the fallback image needs differ
 
 - Do not store Tistory cookies, passwords, or exported browser profiles in the repo.
 - Do not use selectors copied from a prior run without validating the current snapshot.
-- Do not upload the same Codex image across different posts. Each final post needs a new generated image based on its own `cover_prompt.md`; fallback SVGs are preview assets unless the user explicitly accepts fallback publishing.
-- Reject generic or low-polish covers before upload. If the image could fit any AI post, looks like a reusable template, or reads as a simple diagram rather than publish-ready editorial art, regenerate it with stronger topic cues from the article headings/body.
+- Give every final post its own freshly generated image from its own `cover_prompt.md`; fallback SVGs stay preview assets unless the user explicitly accepts fallback publishing. If a cover could fit any AI post, looks like a reusable template, or reads as a simple diagram rather than publish-ready editorial art, regenerate it with stronger topic cues from the article headings/body.
 - In extension attach mode, file upload may fail with `fileChooser.setFiles ... Not allowed`; try CDP mode or a manual chooser handoff before treating the package as broken.
 - Tistory's TinyMCE `getContent()` may store uploaded images as `[##_Image...]` placeholders while the visible editor iframe shows `<img>`; verify both content and visible frame before re-uploading.
-- Do not click final publish controls unless the user explicitly approved publishing in the current task.
-- Do not publicly publish SEO Machine posts by default. Private Tistory publishing is allowed only when the user has approved private publishing in the current task or command.
+- Clicking a public publish control requires the user's explicit approval in the current request; without it, stop at `비공개 저장` or the confirmation screen and report what remains. Private publishing likewise needs the user's approval in the current task or command.
 - Do not use demo/reference copy as if it were the user's article.
