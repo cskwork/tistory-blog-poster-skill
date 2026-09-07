@@ -85,7 +85,7 @@ Current live Tistory editor observations:
 - Attachment path: `첨부` -> `사진` opens a file chooser.
 - Extension attach navigates correctly, but CDP attach may be required for file upload.
 - Bottom controls include `미리보기`, `임시저장`, and `완료`.
-- Restore-draft modal: opening newpost when an autosaved draft exists raises a `confirm()` ("저장된 글이 있습니다. 이어서 작성하시겠습니까?"). The CLI then reports `Tool "browser_run_code_unsafe" does not handle the modal state` and refuses run-code/upload. Handle it as separate CLI steps: `goto` the newpost URL, then `dialog-dismiss` (start fresh), THEN run the fill/upload scripts. Do not call goto inside a run-code script. `tistory_playwright_cli.py --private-publish` does this automatically; `dialog-dismiss` is tolerated when no modal is pending.
+- Restore-draft modal: opening newpost when an autosaved draft exists raises a `confirm()` ("저장된 글이 있습니다. 이어서 작성하시겠습니까?"). The CLI then reports `Tool "browser_run_code_unsafe" does not handle the modal state` and refuses run-code/upload. First preserve any unrelated autosaved draft. When starting fresh is authorized, handle it as separate CLI steps: `goto` the newpost URL, then `dialog-dismiss`, THEN run the fill/upload scripts. Do not call goto inside a run-code script. `tistory_playwright_cli.py --private-publish` does this automatically; `dialog-dismiss` is tolerated when no modal is pending.
 - Publish dialog after `완료`: choose the `비공개` radio, then click `비공개 저장`; the page redirects to `/manage/posts/` on success.
 
 ## Verification
@@ -97,11 +97,11 @@ Before declaring success:
 - Confirm the cover image is at the top.
 - Confirm the first two body sections match the prepared Korean package.
 - Confirm links and code blocks survived insertion.
-- Confirm status: draft, private, scheduled, or published.
+- Confirm status: draft, private, scheduled, or published, using the management-list entry and the reopened post/editor.
 
 ## Publish Gate
 
 - Draft/save is allowed when the user asked to prepare a post.
 - Private publish is allowed when the user asked for SEO Machine final distribution or explicitly requested Tistory private publishing.
-- Final public publish requires explicit approval in the current request.
+- Final public publish requires explicit approval for this article and unchanged scope; reuse that authorization within the task.
 - If approval is missing, stop at the preview or final confirmation screen and report what remains.
